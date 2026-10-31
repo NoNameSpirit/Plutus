@@ -133,4 +133,20 @@ public class CommandLineReaderTests
 
         return (new CommandLineReader(command.Parse(args)), options);
     }
+
+    [Fact]
+    public void Parse_AcceptsMultipleProfilesInOneToken()
+    {
+        var (reader, options) = Parse(".", "--profile", "base", "review-diff");
+
+        reader.Value(options.Profile).Should().Equal("base", "review-diff");
+    }
+
+    [Fact]
+    public void Parse_AcceptsRepeatedProfileFlags()
+    {
+        var (reader, options) = Parse(".", "--profile", "base", "--profile", "ci");
+
+        reader.Value(options.Profile).Should().Equal("base", "ci");
+    }
 }

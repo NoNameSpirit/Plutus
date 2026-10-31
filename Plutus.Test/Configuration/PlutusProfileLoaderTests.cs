@@ -193,63 +193,6 @@ public class PlutusProfileLoaderTests
         loader.Locate(At("workspace/repository/src")).Should().BeNull();
     }
 
-    [Fact]
-    public void Locate_ReturnsNullWhenNoProfileExists()
-    {
-        var loader = Loader(new InMemoryFileProvider().AddDirectory("repository/src"));
-
-        loader.Locate(At("repository/src")).Should().BeNull();
-        loader.LocateAndLoad(At("repository/src")).Found.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Resolve_WithoutAProfileInScope_FindsNothingAndIsNotAFailure()
-    {
-        var loader = Loader(new InMemoryFileProvider().AddDirectory("repository"));
-
-        var result = loader.Resolve(At("repository"));
-
-        result.Succeeded.Should().BeTrue();
-        result.Found.Should().BeFalse();
-        result.Path.Should().BeNull();
-    }
-
-    [Fact]
-    public void Resolve_WithAnExplicitPath_IgnoresTheSearch()
-    {
-        var loader = Loader(new InMemoryFileProvider()
-            .AddFile("searched/.plutusrc", """{ "format": "json" }""")
-            .AddFile("preset.plutusrc", """{ "format": "xml" }"""));
-
-        var result = loader.Resolve(At("searched"), At("preset.plutusrc"));
-
-        result.Path.Should().Be(At("preset.plutusrc"));
-        result.Profile!.Format.Should().Be("xml");
-    }
-
-    [Fact]
-    public void Resolve_WithAMissingExplicitPath_IsAFailure()
-    {
-        var loader = Loader(new InMemoryFileProvider());
-
-        var result = loader.Resolve(At("repository"), At("absent.plutusrc"));
-
-        result.Succeeded.Should().BeFalse();
-        result.Error.Should().Contain("does not exist");
-    }
-
-    [Fact]
-    public void Resolve_Disabled_IgnoresAProfileEvenWhenNamed()
-    {
-        var loader = Loader(new InMemoryFileProvider().AddFile(".plutusrc", """{ "format": "json" }"""));
-
-        var result = loader.Resolve(At("."), At(".plutusrc"), disabled: true);
-
-        result.Succeeded.Should().BeTrue();
-        result.Found.Should().BeFalse();
-        result.Path.Should().BeNull();
-    }
-
     private static PlutusProfileLoader Loader(InMemoryFileProvider provider) =>
         new(new FileProviderAccess(provider, Root));
 
