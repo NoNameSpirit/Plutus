@@ -43,7 +43,7 @@ The options below belong to `bundle`.
 | Option | Default | Description |
 |---|---|---|
 | `-o`, `--output <path>` | Generated in the current working directory | Output file path. If omitted, Plutus derives a bundle name from the first input and selected format. |
-| `--profile <path>` | Discovered automatically | Use this `.plutusrc` profile instead of searching for one. Overrides the `PLUTUS_PROFILE` environment variable. See [Configuration profiles](CONFIGURATION.md). |
+| `--profile <path...>` | Discovered automatically | Use these `.plutusrc` profiles instead of searching for one; repeatable, later profiles override earlier ones. Overrides the `PLUTUS_PROFILE` environment variable. See [Configuration profiles](CONFIGURATION.md). |
 | `--no-profile` | Off | Ignore any `.plutusrc` profile (and `PLUTUS_PROFILE`) and run with the command line and built-in defaults only. |
 | `--format <md\|json\|xml>` | `md` | Output serialization format. |
 | `--max-file-size <size>` | `1M` | Maximum size of an individual file eligible for reading and inclusion. Examples: `512K`, `1M`, `2MB`. Oversized files are represented as skipped in the bundle's tree/metadata rather than embedded as source content. |
@@ -118,6 +118,9 @@ dotnet run --project Plutus.CLI -- bundle . -o context.md
 
 # ...and here --format json overrides the profile while its exclusions still apply
 dotnet run --project Plutus.CLI -- bundle . -o context.json --format json
+
+# Layer two profiles: base first, then a review-specific override
+dotnet run --project Plutus.CLI -- bundle . --profile base review
 ```
 
 Every run that used a profile says so, together with the keys that decided the run and the ones the command line

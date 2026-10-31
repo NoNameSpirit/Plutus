@@ -70,7 +70,7 @@ put a value in.
 
 A run looks for `.plutusrc`, then `.plutusrc.json`, in this order:
 
-1. the path named by `--profile <path>`, when given;
+1. the path named by `--profile <path>`, when given — repeatable, later profiles override earlier ones;
 2. otherwise the path named by the `PLUTUS_PROFILE` environment variable, when set;
 3. otherwise the nearest profile in the working directory or any parent directory, stopping at the git repository
    root — a profile kept *above* the repository belongs to whatever is above it and is deliberately not picked up.
@@ -85,12 +85,38 @@ The file is JSON. Comments (`//`, `/* */`) and trailing commas are accepted, so 
 ships no YAML parser, and a hand-written one would be a liability for block scalars, anchors and merge keys. If YAML
 is wanted, it should arrive as a deliberate dependency and a documented schema.
 
+## Cascading profiles
+
+`--profile` can be given more than once, or with several names in one token; the profiles are applied in the order
+they are stated, and a later profile overrides a key an earlier one set:
+
+```bash
+dotnet run --project Plutus.CLI -- bundle . --profile base review-diff
+dotnet run --project Plutus.CLI -- bundle . --profile base --profile ci
+```
+
+Each name resolves to `.<name>.plutusrc` next to the working directory, so `--profile base review-diff` reads
+`.base.plutusrc` and then `.review-diff.plutusrc`.
+
+Both spellings mean the same: `base` first, then `review-diff` / `ci`. Strings, numbers, enums and flags follow
+"the later profile wins". Array keys (`excludeDirs`, `includeFiles`, …) are **unioned** across every profile in the
+chain instead of being replaced, because excluding generated directories is additive in practice.
+
+The chain sits under the implicit layers and over the environment, exactly where a single profile did:
+
+```text
+default.plutusrc  <  .plutusrc  <  --profile base  <  --profile review-diff  <  PLUTUS_* env  <  explicit CLI flags
+```
+
+A named profile that does not exist fails the run and names the file; the chain is never silently shortened.
+
 ## Precedence
 
 | Source | Wins over |
 |---|---|
 | An explicit command-line flag | the profile and the built-in default |
-| A key stated by the profile | the built-in default |
+| A key stated by a later profile (string, number, enum, flag) | an earlier profile and the built-in default |
+| An array key stated by any profile | unioned across all profiles in the chain |
 | The built-in default of the option | — |
 
 A flag **replaces** the profile's value for the same key rather than adding to it, and the run report states what
@@ -251,6 +277,8 @@ signaturesOnly, stripComments, tokenOverflowPolicy, tokenSelectionStrategy, useD
   output path, token budget and diff limits from the profile, and the provenance the report prints.
 - `Plutus.Test/Configuration/ProfileTemplateTests.cs` — the generated template writes every key the loader accepts,
   comes back unchanged through the loader, and states the values a run would use anyway.
+- `Plutus.Test/Configuration/PlutusConfigurationBuilderTests.cs` — cascading named profiles: later ones override
+  earlier ones for strings and flags, arrays are unioned across layers, and a missing profile is an error.
 - `Plutus.Test/Cli/CommandLineReaderTests.cs` — the "stated or not stated" distinction the precedence depends on
   (including `--minify false` and `--no-gitignore`), and the command surface: bundling with an `init` subcommand.
 - `Plutus.Test/Configuration/ProfileScaffolderTests.cs` — the write: template content, no byte-order mark, creating
