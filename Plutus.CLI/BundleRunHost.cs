@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Plutus.Domain;
 using Plutus.Domain.Diagnostics;
@@ -13,7 +14,7 @@ namespace Plutus.CLI;
 /// </summary>
 internal static class BundleRunHost
 {
-    public static async Task<int> RunAsync(RunAppOptions options, IRunOutput output, FileProviderAccess files)
+    public static async Task<int> RunAsync(RunAppOptions options, IRunOutput output, FileProviderAccess files, IConfiguration configuration)
     {
         Console.OutputEncoding = options.TargetEncoding;
         Console.InputEncoding = options.TargetEncoding;
@@ -55,6 +56,7 @@ internal static class BundleRunHost
         try
         {
             var services = new ServiceCollection();
+            services.AddSingleton(configuration);
             services.AddInfrastructureServices(options, output, files);
             await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
             {

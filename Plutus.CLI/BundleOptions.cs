@@ -24,9 +24,11 @@ internal sealed class BundleOptions
         Description = "Output bundle file. Default: <folder-name>_bundle.md"
     };
 
-    public Option<string?> Profile { get; } = new("--profile")
+    public Option<List<string>?> Profile { get; } = new("--profile")
     {
-        Description = "Path to a .plutusrc profile to use instead of searching for one. Overrides the PLUTUS_PROFILE environment variable."
+        Description = "Path to a .plutusrc profile. Repeat to layer profiles: later ones override earlier ones. Overrides the PLUTUS_PROFILE environment variable.",
+        Arity = ArgumentArity.OneOrMore,
+        AllowMultipleArgumentsPerToken = true
     };
 
     public Option<bool> NoProfile { get; } = new("--no-profile")

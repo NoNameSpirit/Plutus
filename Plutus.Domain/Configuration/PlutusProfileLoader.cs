@@ -85,34 +85,6 @@ public sealed class PlutusProfileLoader(FileProviderAccess files)
         }
     }
 
-    /// <summary>Searches for the governing profile and reads it; a run with none simply has no profile.</summary>
-    public ProfileLoadResult LocateAndLoad(string startDirectory)
-    {
-        var path = Locate(startDirectory);
-        return path is null ? new ProfileLoadResult() : Load(path);
-    }
-
-    /// <summary>
-    /// The profile of a run: the explicitly named one, or the nearest one governing <paramref name="startDirectory"/>.
-    /// Disabling wins over both, which is what <c>--no-profile</c> means.
-    /// </summary>
-    public ProfileLoadResult Resolve(string startDirectory, string? explicitPath = null, bool disabled = false)
-    {
-        if (disabled)
-        {
-            return new ProfileLoadResult();
-        }
-
-        if (!string.IsNullOrWhiteSpace(explicitPath))
-        {
-            return files.FileExists(explicitPath)
-                ? Load(explicitPath)
-                : new ProfileLoadResult { Path = explicitPath, Error = $"profile '{explicitPath}' does not exist" };
-        }
-
-        return LocateAndLoad(startDirectory);
-    }
-
     /// <summary>Reads one profile file and validates it.</summary>
     public ProfileLoadResult Load(string path)
     {
