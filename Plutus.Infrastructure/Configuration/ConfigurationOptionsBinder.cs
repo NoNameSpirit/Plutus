@@ -9,7 +9,6 @@ namespace Plutus.Infrastructure.Configuration;
 /// <summary>
 /// Turns the aggregated configuration into a PlutusProfile. It serializes the configuration tree to JSON and
 /// deserializes it with the converters the profile loader uses.
-/// (Built-in binder cannot read a kebab-case enum, a duration such as "2m", or a boolean stored as "True").
 /// </summary>
 public sealed class ConfigurationOptionsBinder
 {
@@ -19,12 +18,11 @@ public sealed class ConfigurationOptionsBinder
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
         Converters =
         {
             new JsonStringEnumConverter(JsonNamingPolicy.KebabCaseLower),
             new TimeSpanConverter(),
-            new StringToBoolConverter(),
-            new StringToIntConverter(),
         },
     };
 
@@ -59,7 +57,7 @@ public sealed class ConfigurationOptionsBinder
             var nestedChildren = child.GetChildren().ToList();
             if (nestedChildren.Count > 0 && nestedChildren.All(c => int.TryParse(c.Key, out _)))
             {
-                target[child.Key] = nestedChildren.Select(c => c.Value).ToList();
+                target[child.Key] = nestedChildren.ConvertAll(c => c.Value);
                 continue;
             }
 
@@ -76,7 +74,7 @@ public sealed class ConfigurationOptionsBinder
                 continue;
             }
 
-            target[child.Key] = child.Value;
+            target[child.Key] = bool.TryParse(child.Value, out var value) ? value : child.Value;
         }
     }
 
@@ -105,51 +103,4 @@ public sealed class ConfigurationOptionsBinder
 
         return result?.ToList();
     }
-}
-
-internal sealed class StringToBoolConverter : JsonConverter<bool>
-{
-    public override bool Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType == JsonTokenType.True)
-        {
-            return true;
-        }
-
-        if (reader.TokenType == JsonTokenType.False)
-        {
-            return false;
-        }
-
-        if (reader.TokenType == JsonTokenType.String && bool.TryParse(reader.GetString(), out var value))
-        {
-            return value;
-        }
-
-        return default;
-    }
-
-    public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options) =>
-        writer.WriteBooleanValue(value);
-}
-
-internal sealed class StringToIntConverter : JsonConverter<int>
-{
-    public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType == JsonTokenType.Number)
-        {
-            return reader.GetInt32();
-        }
-
-        if (reader.TokenType == JsonTokenType.String && int.TryParse(reader.GetString(), out var value))
-        {
-            return value;
-        }
-
-        return default;
-    }
-
-    public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options) =>
-        writer.WriteNumberValue(value);
 }
