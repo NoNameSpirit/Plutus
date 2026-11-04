@@ -108,22 +108,22 @@ internal static class BundleCommand
         IFileInfoDetailProvider detailProvider,
         IRunOutput output)
     {
-        var noProfile = reader.Value(options.NoProfile);
-        var named = reader.Value(options.Profile) ?? [];
-        var fromEnvironment = Environment.GetEnvironmentVariable(PlutusProfileLoader.PathVariable);
-        if (named.Count < 1 && fromEnvironment is not null)
-        {
-            named = [fromEnvironment];
-        }
+        var rawEnv = Environment.GetEnvironmentVariable(PlutusProfileLoader.PathVariable);
+        var fromEnv = string.IsNullOrWhiteSpace(rawEnv) ? [] : rawEnv
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        var fromCli = reader.Value(options.Profile) ?? [];
 
+        var named = fromCli.Count > 0 ? fromCli : fromEnv;
+        var noProfile = reader.Value(options.NoProfile);
         if (noProfile && named.Count > 0)
         {
             output.Warning("--no-profile ignores --profile and the PLUTUS_PROFILE environment variable.");
-        }
-
-        if (noProfile)
-        {
             named = [];
+        }
+        else if (fromCli.Count > 0 && fromEnv.Count > 0)
+        {
+            output.Warning("--profile is set; PLUTUS_PROFILE is ignored.");
         }
 
         var result = new PlutusConfigurationBuilder(files).Build(detailProvider.GetCurrentDirectory(), named);

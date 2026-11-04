@@ -48,43 +48,53 @@ public sealed class PlutusConfigurationBuilder(FileProviderAccess files)
             paths.Add(path);
         }
 
-        var builder = new ConfigurationBuilder();
-        foreach (var path in paths)
-        {
-            var json = files.ReadAllText(path);
-            builder.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)));
-        }
-
-        builder.AddEnvironmentVariables(prefix: "PLUTUS_");
-
-        var configuration = builder.Build();
-        var layers = BuildLayers(paths);
+        var layerResult = GetRootsAndProviders(paths);
 
         return new PlutusConfigurationResult
         {
-            Configuration = configuration,
-            Layers = layers,
+            Configuration = new ConfigurationRoot(layerResult.Providers.ToList()),
+            Layers = layerResult.Roots,
         };
     }
 
     /// <summary>
     /// Rebuilds each source on its own so the binder can union the arrays across layers instead of letting the last one win.
     /// </summary>
-    private IReadOnlyList<IConfiguration> BuildLayers(IReadOnlyList<string> paths)
+    private LayersResult GetRootsAndProviders(IReadOnlyList<string> paths)
     {
-        var result = new List<IConfiguration>();
+        var configurationRoots = new List<IConfigurationRoot>();
+        var mainBuilder = new ConfigurationBuilder();
+
         foreach (var path in paths)
         {
             var json = files.ReadAllText(path);
-            result.Add(new ConfigurationBuilder()
-                .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
-                .Build());
+            var bytes = Encoding.UTF8.GetBytes(json);
+
+            var layerRoot = new ConfigurationBuilder()
+                .AddJsonStream(new MemoryStream(bytes))
+                .Build();
+            configurationRoots.Add(layerRoot);
+
+            mainBuilder.AddJsonStream(new MemoryStream(bytes));
         }
 
-        result.Add(new ConfigurationBuilder()
-            .AddEnvironmentVariables(prefix: "PLUTUS_")
-            .Build());
+        mainBuilder.AddEnvironmentVariables(prefix: "PLUTUS_");
 
-        return result;
+        var environmentRoot = new ConfigurationBuilder()
+            .AddEnvironmentVariables(prefix: "PLUTUS_")
+            .Build();
+        configurationRoots.Add(environmentRoot);
+
+        return new LayersResult
+        {
+            Roots = configurationRoots,
+            Providers = mainBuilder.Sources.Select(s => s.Build(mainBuilder)).ToList()
+        };
+    }
+
+    private sealed record LayersResult
+    {
+        public IReadOnlyList<IConfigurationRoot> Roots { get; init; } = [];
+        public IReadOnlyList<IConfigurationProvider> Providers { get; init; } = [];
     }
 }
