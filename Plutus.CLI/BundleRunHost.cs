@@ -56,7 +56,6 @@ internal static class BundleRunHost
         try
         {
             var services = new ServiceCollection();
-            services.AddSingleton(configuration);
             services.AddInfrastructureServices(options, output, files);
             await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
             {
