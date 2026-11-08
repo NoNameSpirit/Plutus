@@ -52,29 +52,36 @@ public sealed class ConfigurationOptionsBinder
 
     private static void Fill(IEnumerable<IConfigurationSection> children, Dictionary<string, object?> target)
     {
-        foreach (var child in children)
+        var stack = new Stack<(IEnumerable<IConfigurationSection>, Dictionary<string, object?>)>();
+        stack.Push((children, target));
+
+        while (stack.Count > 0)
         {
-            var nestedChildren = child.GetChildren().ToList();
-            if (nestedChildren.Count > 0 && nestedChildren.All(c => int.TryParse(c.Key, out _)))
+            var (levelChildren, currentTarget) = stack.Pop();
+            foreach (var child in levelChildren)
             {
-                target[child.Key] = nestedChildren.ConvertAll(c => c.Value);
-                continue;
-            }
+                var nestedChildren = child.GetChildren().ToList();
+                if (nestedChildren.Count > 0 && nestedChildren.All(c => int.TryParse(c.Key, out _)))
+                {
+                    currentTarget[child.Key] = nestedChildren.ConvertAll(c => c.Value);
+                    continue;
+                }
 
-            if (nestedChildren.Count > 0)
-            {
-                var nested = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-                Fill(nestedChildren, nested);
-                target[child.Key] = nested;
-                continue;
-            }
+                if (nestedChildren.Count > 0)
+                {
+                    var nested = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                    stack.Push((nestedChildren, nested));
+                    currentTarget[child.Key] = nested;
+                    continue;
+                }
 
-            if (string.IsNullOrEmpty(child.Value))
-            {
-                continue;
-            }
+                if (string.IsNullOrEmpty(child.Value))
+                {
+                    continue;
+                }
 
-            target[child.Key] = bool.TryParse(child.Value, out var value) ? value : child.Value;
+                currentTarget[child.Key] = bool.TryParse(child.Value, out var value) ? value : child.Value;
+            }
         }
     }
 
