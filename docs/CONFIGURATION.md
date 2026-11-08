@@ -68,22 +68,21 @@ put a value in.
 
 ## Where the profile is found
 
-A run looks for `.plutusrc`, then `.plutusrc.json`, in this order:
+Plutus searches for a base profile from the current working directory upwards,
+stopping at the repository root. It uses the first `.plutusrc` or
+`.plutusrc.json` file it finds. Profiles from different directories are not
+merged.
 
-1. the path named by `--profile <path>`, when given — repeatable, later profiles override earlier ones;
-2. otherwise the path named by the `PLUTUS_PROFILE` environment variable, when set;
-3. otherwise the nearest profile in the working directory or any parent directory, stopping at the git repository
-   root — a profile kept *above* the repository belongs to whatever is above it and is deliberately not picked up.
+The directory containing the discovered base profile is used to resolve
+`default.plutusrc` and named profiles. If no base profile is found, the current
+working directory is used instead.
 
-`--no-profile` disables all three, so a run can always be reproduced with the command line alone. A profile that is
-named explicitly but does not exist is an error, not an empty preset: a typo must not look like "this repository
-wants the defaults". The same goes for a profile that cannot be read, is not valid JSON, or states a key Plutus does
-not know.
+Configuration files are loaded in this order:
 
-The file is JSON. Comments (`//`, `/* */`) and trailing commas are accepted, so it reads like a configuration file;
-`docs/CONFIGURATION.md` uses `.jsonc` examples for that reason. A YAML profile is **not** supported: the project
-ships no YAML parser, and a hand-written one would be a liability for block scalars, anchors and merge keys. If YAML
-is wanted, it should arrive as a deliberate dependency and a documented schema.
+1. `default.plutusrc`, when present;
+2. the discovered `.plutusrc` or `.plutusrc.json`, when present;
+3. named profiles specified by `--profile`, each resolving to
+   `<name>.plutusrc` in the selected configuration directory.
 
 ## Cascading profiles
 
@@ -95,17 +94,21 @@ dotnet run --project Plutus.CLI -- bundle . --profile base review-diff
 dotnet run --project Plutus.CLI -- bundle . --profile base --profile ci
 ```
 
-Each name resolves to `.<name>.plutusrc` next to the working directory, so `--profile base review-diff` reads
-`.base.plutusrc` and then `.review-diff.plutusrc`.
+Each name resolves to `<name>.plutusrc` in the selected configuration directory,
+so `--profile base review-diff` reads `base.plutusrc` and then
+`review-diff.plutusrc`.
 
 Both spellings mean the same: `base` first, then `review-diff` / `ci`. Strings, numbers, enums and flags follow
-"the later profile wins". Array keys (`excludeDirs`, `includeFiles`, …) are **unioned** across every profile in the
-chain instead of being replaced, because excluding generated directories is additive in practice.
+"the later profile wins". Array keys (`excludeDirs`, `includeFiles`, …) are **unioned** across all configuration
+layers, including environment variables, instead of being replaced, because excluding generated directories is
+additive in practice.
 
-The chain sits under the implicit layers and over the environment, exactly where a single profile did:
+Environment variables provide the lowest-precedence configuration values. Configuration files override them,
+and each later file or named profile overrides the previous ones. Explicit command-line flags have the highest
+precedence:
 
 ```text
-default.plutusrc  <  .plutusrc  <  --profile base  <  --profile review-diff  <  PLUTUS_* env  <  explicit CLI flags
+built-in defaults  <  PLUTUS_* env  <  default.plutusrc  <  .plutusrc  <  --profile base  <  --profile review-diff  <  explicit CLI flags
 ```
 
 A named profile that does not exist fails the run and names the file; the chain is never silently shortened.
@@ -116,8 +119,9 @@ A named profile that does not exist fails the run and names the file; the chain 
 |---|---|
 | An explicit command-line flag | the profile and the built-in default |
 | A key stated by a later profile (string, number, enum, flag) | an earlier profile and the built-in default |
-| An array key stated by any profile | unioned across all profiles in the chain |
+| An array key stated by any configuration layer | unioned across all configuration layers |
 | The built-in default of the option | — |
+| A value from a configuration file | a PLUTUS_* environment variable for the same key |
 
 A flag **replaces** the profile's value for the same key rather than adding to it, and the run report states what
 happened:
