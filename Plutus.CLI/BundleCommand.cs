@@ -1,5 +1,4 @@
 using System.CommandLine;
-using Microsoft.Extensions.Configuration;
 using Plutus.Domain;
 using Plutus.Domain.ArchiveExtractor;
 using Plutus.Domain.Comments;
@@ -87,7 +86,7 @@ internal static class BundleCommand
 
         try
         {
-            return await BundleRunHost.RunAsync(resolved, output, files, profileResult.Configuration!);
+            return await BundleRunHost.RunAsync(resolved, output, files, profileResult.Configuration);
         }
         catch (Exception exception)
         {
@@ -123,18 +122,18 @@ internal static class BundleCommand
         }
         else if (fromCli.Count > 0 && fromEnv.Count > 0)
         {
-            output.Warning("--profile is set; PLUTUS_PROFILE is ignored.");
+            output.Warning("The --profile parameter is specified, but the PLUTUS_PROFILE environment variable is being ignored.");
         }
 
-        var result = new PlutusConfigurationBuilder(files).Build(detailProvider.GetCurrentDirectory(), named);
+        var result = new PlutusConfigurationBuilder(files).Build(detailProvider.GetCurrentDirectory(), named, !noProfile);
         if (!result.Succeeded)
         {
             return new ProfileConfigurationResult { Error = result.Error };
         }
 
-        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration!, result.Layers);
+        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration, result.Layers);
 
-        var profilePath = named.Count > 0 ? Path.Combine(detailProvider.GetCurrentDirectory(), $".{named[^1]}.plutusrc") : null;
+        var profilePath = named.Count > 0 ? Path.Combine(detailProvider.GetCurrentDirectory(), $"{named[^1]}.plutusrc") : null;
 
         return new ProfileConfigurationResult
         {
@@ -263,14 +262,5 @@ internal static class BundleCommand
         {
             output.Warning("--comment-strategy has no effect without --strip-comments or --minify.");
         }
-    }
-
-    private sealed record ProfileConfigurationResult
-    {
-        public IConfiguration? Configuration { get; init; }
-        public PlutusProfile? Profile { get; init; }
-        public string? Path { get; init; }
-        public string? Error { get; init; }
-        public bool Succeeded => Error is null;
     }
 }

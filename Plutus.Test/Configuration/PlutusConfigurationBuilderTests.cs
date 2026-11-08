@@ -16,11 +16,11 @@ public class PlutusConfigurationBuilderTests
         var filesAccess = new FileProviderAccess(files, Root);
         var builder = new PlutusConfigurationBuilder(filesAccess);
 
-        var result = builder.Build(Root, []);
+        var result = builder.Build(Root, [], true);
 
         result.Succeeded.Should().BeTrue(result.Error);
 
-        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration!, result.Layers);
+        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration, result.Layers);
         profile.Format.Should().Be("json");
         profile.ExcludeDirs.Should().Equal("bin");
     }
@@ -30,13 +30,13 @@ public class PlutusConfigurationBuilderTests
     {
         var files = new InMemoryFileProvider()
             .AddFile(".plutusrc", """{ "format": "md" }""")
-            .AddFile(".petya.plutusrc", """{ "format": "json" }""");
+            .AddFile("temp.plutusrc", """{ "format": "json" }""");
         var builder = new PlutusConfigurationBuilder(new FileProviderAccess(files, Root));
 
-        var result = builder.Build(Root, ["petya"]);
+        var result = builder.Build(Root, ["temp"], true);
         result.Succeeded.Should().BeTrue(result.Error);
 
-        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration!, result.Layers);
+        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration, result.Layers);
         profile.Format.Should().Be("json");
     }
 
@@ -45,13 +45,13 @@ public class PlutusConfigurationBuilderTests
     {
         var files = new InMemoryFileProvider()
             .AddFile(".plutusrc", """{ "useGitignore": true }""")
-            .AddFile(".petya.plutusrc", """{ "useGitignore": false }""");
+            .AddFile("temp.plutusrc", """{ "useGitignore": false }""");
         var builder = new PlutusConfigurationBuilder(new FileProviderAccess(files, Root));
 
-        var result = builder.Build(Root, ["petya"]);
+        var result = builder.Build(Root, ["temp"], true);
         result.Succeeded.Should().BeTrue(result.Error);
 
-        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration!, result.Layers);
+        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration, result.Layers);
         profile.UseGitignore.Should().BeFalse();
     }
 
@@ -60,13 +60,13 @@ public class PlutusConfigurationBuilderTests
     {
         var files = new InMemoryFileProvider()
             .AddFile(".plutusrc", """{ "excludeDirs": ["bin", "obj"] }""")
-            .AddFile(".petya.plutusrc", """{ "excludeDirs": ["dist"] }""");
+            .AddFile("temp.plutusrc", """{ "excludeDirs": ["dist"] }""");
         var builder = new PlutusConfigurationBuilder(new FileProviderAccess(files, Root));
 
-        var result = builder.Build(Root, ["petya"]);
+        var result = builder.Build(Root, ["temp"], true);
         result.Succeeded.Should().BeTrue(result.Error);
 
-        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration!, result.Layers);
+        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration, result.Layers);
         profile.ExcludeDirs.Should().BeEquivalentTo("bin", "obj", "dist");
     }
 
@@ -76,14 +76,14 @@ public class PlutusConfigurationBuilderTests
     {
         var files = new InMemoryFileProvider()
             .AddFile(".plutusrc", """{ "format": "md" }""")
-            .AddFile(".base.plutusrc", """{ "format": "xml" }""")
-            .AddFile(".review.plutusrc", """{ "format": "json" }""");
+            .AddFile("base.plutusrc", """{ "format": "xml" }""")
+            .AddFile("review.plutusrc", """{ "format": "json" }""");
         var builder = new PlutusConfigurationBuilder(new FileProviderAccess(files, Root));
 
-        var result = builder.Build(Root, ["base", "review"]);
+        var result = builder.Build(Root, ["base", "review"], true);
         result.Succeeded.Should().BeTrue(result.Error);
 
-        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration!, result.Layers);
+        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration, result.Layers);
         profile.Format.Should().Be("json");
     }
 
@@ -93,10 +93,40 @@ public class PlutusConfigurationBuilderTests
         var files = new InMemoryFileProvider();
         var builder = new PlutusConfigurationBuilder(new FileProviderAccess(files, Root));
 
-        var result = builder.Build(Root, ["missing"]);
+        var result = builder.Build(Root, ["missing"], true);
 
         result.Succeeded.Should().BeFalse();
         result.Error.Should().Contain("'missing'");
-        result.Error.Should().Contain(".missing.plutusrc");
+        result.Error.Should().Contain("missing.plutusrc");
+    }
+
+    [Fact]
+    public void Build_WhenConfigurationLoadingIsDisabled_ReturnsEmptyConfiguration()
+    {
+        var files = new InMemoryFileProvider()
+            .AddFile("default.plutusrc", """{ "format": "xml" }""");
+        var builder = new PlutusConfigurationBuilder(new FileProviderAccess(files, Root));
+
+        var result = builder.Build(Root, [], loadConfiguration: false);
+
+        result.Succeeded.Should().BeTrue();
+        result.Layers.Should().BeEmpty();
+        result.Profile.Should().BeNull();
+    }
+
+    [Fact]
+    public void Build_WhenBaseProfileIsInParentDirectory_LoadsNamedProfileFromParentDirectory()
+    {
+        var workingDirectory = Path.Combine(Root, "src", "Feature");
+        var files = new InMemoryFileProvider()
+            .AddFile(".plutusrc", """{ "format": "md" }""")
+            .AddFile("review.plutusrc", """{ "format": "json" }""");
+        var builder = new PlutusConfigurationBuilder(new FileProviderAccess(files, Root));
+
+        var result = builder.Build(workingDirectory, ["review"], true);
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        var profile = new ConfigurationOptionsBinder().Bind(result.Configuration, result.Layers);
+        profile.Format.Should().Be("json");
     }
 }

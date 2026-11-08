@@ -1,45 +1,55 @@
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Plutus.Domain;
+using Plutus.Domain.Configuration;
 
 namespace Plutus.Infrastructure.Configuration;
 
-public sealed record PlutusConfigurationResult
+public sealed record ProfileConfigurationResult
 {
-    public IConfigurationRoot? Configuration { get; init; }
+    public IConfigurationRoot Configuration { get; init; } = new ConfigurationRoot([]);
     public IReadOnlyList<IConfiguration> Layers { get; init; } = [];
+    public PlutusProfile? Profile { get; init; }
     public string? Error { get; init; }
+    public string? Path { get; init; }
     public bool Succeeded => Error is null;
 }
 
 /// <summary>
-/// Builds the aggregated configuration of a run: the implicit base profiles, the named ones in the order the user
-/// stated them, and the PLUTUS_ environment variables. A later source overrides an earlier one.
+/// Builds the aggregated configuration of a run: PLUTUS_ environment variables, implicit base profiles, and named
+/// profiles in the order the user stated them. A later source overrides an earlier one.
 /// </summary>
 public sealed class PlutusConfigurationBuilder(FileProviderAccess files)
 {
-    public PlutusConfigurationResult Build(string workingDirectory, IReadOnlyList<string> namedProfiles)
+    public ProfileConfigurationResult Build(string workingDirectory, IReadOnlyList<string> namedProfiles, bool loadConfiguration)
     {
+        if (!loadConfiguration)
+        {
+            return new ProfileConfigurationResult();
+        }
+
+        var locatedProfile = new PlutusProfileLoader(files).Locate(workingDirectory);
+        var profileDirectory = locatedProfile is null ? workingDirectory : Path.GetDirectoryName(locatedProfile)!;
+
         var paths = new List<string>();
 
-        var defaults = Path.Combine(workingDirectory, "default.plutusrc");
+        var defaults = Path.Combine(profileDirectory, "default.plutusrc");
         if (files.FileExists(defaults))
         {
             paths.Add(defaults);
         }
 
-        var basePath = Path.Combine(workingDirectory, ".plutusrc");
-        if (files.FileExists(basePath))
+        if (locatedProfile is not null)
         {
-            paths.Add(basePath);
+            paths.Add(locatedProfile);
         }
 
         foreach (var profile in namedProfiles)
         {
-            var path = Path.Combine(workingDirectory, $".{profile}.plutusrc");
+            var path = Path.Combine(profileDirectory, $"{profile}.plutusrc");
             if (!files.FileExists(path))
             {
-                return new PlutusConfigurationResult
+                return new ProfileConfigurationResult
                 {
                     Error = $"profile '{profile}' does not exist, path: {path}."
                 };
@@ -50,7 +60,7 @@ public sealed class PlutusConfigurationBuilder(FileProviderAccess files)
 
         var layerResult = GetRootsAndProviders(paths);
 
-        return new PlutusConfigurationResult
+        return new ProfileConfigurationResult
         {
             Configuration = new ConfigurationRoot(layerResult.Providers.ToList()),
             Layers = layerResult.Roots,
@@ -62,9 +72,14 @@ public sealed class PlutusConfigurationBuilder(FileProviderAccess files)
     /// </summary>
     private LayersResult GetRootsAndProviders(IReadOnlyList<string> paths)
     {
-        var configurationRoots = new List<IConfigurationRoot>();
-        var mainBuilder = new ConfigurationBuilder();
+        var environmentRoot = new ConfigurationBuilder()
+            .AddEnvironmentVariables(prefix: "PLUTUS_")
+            .Build();
 
+        var mainBuilder = new ConfigurationBuilder()
+            .AddEnvironmentVariables(prefix: "PLUTUS_");
+
+        var configurationRoots = new List<IConfigurationRoot>();
         foreach (var path in paths)
         {
             var json = files.ReadAllText(path);
@@ -78,11 +93,6 @@ public sealed class PlutusConfigurationBuilder(FileProviderAccess files)
             mainBuilder.AddJsonStream(new MemoryStream(bytes));
         }
 
-        mainBuilder.AddEnvironmentVariables(prefix: "PLUTUS_");
-
-        var environmentRoot = new ConfigurationBuilder()
-            .AddEnvironmentVariables(prefix: "PLUTUS_")
-            .Build();
         configurationRoots.Add(environmentRoot);
 
         return new LayersResult
